@@ -1,68 +1,18 @@
-trigger:
-- main
+// Fichier: bicep/main.bicep
+param location string = resourceGroup().location
 
-variables:
-  azureServiceConnection: 'Azure-Subscription-Conn'
-  resourceGroupName: 'RG-HYBRID-LAB'
-  location: 'westeurope'
-  templateFile: 'bicep/main.bicep'
+// 'st' + un hash unique basé sur l'ID du groupe de ressources
+var storageName = 'st${uniqueString(resourceGroup().id)}'
 
-pool:
-  name: 'Default' 
+// La ressource réelle
+resource storageaccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageName
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS' // Stockage le moins cher pour le test
+  }
+}
 
-stages:
-- stage: Validate
-  jobs:
-  - job: Lint_And_Validate
-    steps:
-    - task: AzureCLI@2
-      displayName: 'Bicep Linter & ARM Validation'
-      inputs:
-        azureSubscription: $(azureServiceConnection)
-        scriptType: 'pscore'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          # 1. Basic Build/Lint
-          az bicep build --file $(templateFile)
-          
-          # 2. Cloud-side Validation (Deployment Check)
-          az deployment group validate `
-            --resource-group $(resourceGroupName) `
-            --template-file $(templateFile)
-
-- stage: Preview
-  dependsOn: Validate
-  jobs:
-  - job: WhatIf
-    steps:
-    - task: AzureCLI@2
-      displayName: 'What-If Analysis'
-      inputs:
-        azureSubscription: $(azureServiceConnection)
-        scriptType: 'pscore'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          az deployment group what-if `
-            --resource-group $(resourceGroupName) `
-            --template-file $(templateFile)
-
-- stage: Deploy
-  dependsOn: Preview
-  condition: succeeded()
-  jobs:
-  - deployment: Bicep_Deployment
-    environment: 'Production' # Adds a manual approval gate in Azure DevOps UI
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: AzureResourceManagerTemplateDeployment@3
-            inputs:
-              deploymentScope: 'Resource Group'
-              azureResourceManagerConnection: $(azureServiceConnection)
-              action: 'Create Or Update Resource Group'
-              resourceGroupName: $(resourceGroupName)
-              location: $(location)
-              templateLocation: 'Linked artifact'
-              csmFile: $(templateFile)
-              deploymentMode: 'Incremental'
+// On affiche le nom du stockage créé à la fin
+output storageName string = storageaccount.name
