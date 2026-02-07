@@ -1,0 +1,15 @@
+trigger:
+- main
+
+pool:
+  name: 'Default'
+
+jobs:
+- job: TestHybridLink
+  displayName: 'Test du lien Mac -> Cloud -> VM Tools'
+  steps:
+  - powershell: |
+      Write-Host "Connexion établie avec succès !"
+      Write-Host "Hostname de l'agent : $env:COMPUTERNAME"
+      Write-Host "Répertoire de travail : $(Build.SourcesDirectory)"
+    displayName: 'Exécution sur VM-TOOLS'

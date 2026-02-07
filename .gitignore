@@ -1,0 +1,6 @@
+.terraform/
+*.tfstate
+*.tfvars
+_work/
+bin/
+obj/
