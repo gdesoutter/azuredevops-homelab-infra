@@ -8,7 +8,6 @@ variables:
   resourceGroupName: 'RG-HYBRID-LAB'
   location: 'francecentral' # Aligné sur ton test manuel réussi
   terraformDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-  bicepFile: 'bicep/main.bicep'
   tfBackendResourceGroup: 'RG-TERRAFORM-STATE'
   tfBackendStorageAccount: 'tfstatelabguillaume' 
   tfBackendContainer: 'tfstate'
@@ -78,56 +77,3 @@ stages:
             workingDirectory: '$(terraformDirectory)'
             displayName: 'Export VM Name'
             name: 'TFOutput'
-
-  # STAGE 2 : BICEP (Configuration DSC)
-  - stage: Bicep_Config
-    displayName: 'Configure Arc Machine'
-    dependsOn: Terraform_Deploy
-    condition: succeeded()
-    variables:
-      vmName: $[ stageDependencies.Terraform_Deploy.ProvisionVM.outputs['TFOutput.vmName'] ]
-    jobs:
-      - job: ConfigureDSC
-        steps:
-          # Pause cruciale pour l'indexation ARM (Évite l'erreur HCRP404)
-          - powershell: |
-              Write-Host "Attente de 120s pour la propagation d'Azure Arc de $(vmName)..."
-              Start-Sleep -Seconds 120
-            displayName: 'Wait for Arc Propagation'
-
-          - task: AzureKeyVault@2
-            displayName: 'Get Domain Secrets'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              KeyVaultName: 'KV-labguillaume'
-              SecretsFilter: 'DomainJoinUsername,DomainJoinPassword' 
-              RunAsPreJob: true
-
-          - task: AzureCLI@2
-            displayName: 'Generate SAS and Deploy Bicep'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              scriptType: 'pscore'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                # 1. Génération de l'URL SAS sécurisée pour le ZIP
-                $expiry = (Get-Date).AddHours(2).ToString("yyyy-MM-ddTHH:mm:ssZ")
-                $fullSasUrl = az storage blob generate-sas `
-                  --account-name tfstatelabguillaume `
-                  --container-name dsc-configs `
-                  --name DomainJoin.zip `
-                  --permissions r `
-                  --expiry $expiry `
-                  --full-uri `
-                  --output tsv
-                
-                Write-Host "SAS URL générée avec succès."
-
-                # 2. Déploiement Bicep
-                az deployment group create `
-                  --resource-group $(resourceGroupName) `
-                  --template-file bicep/main.bicep `
-                  --parameters vmName=$(vmName) `
-                               domainJoinUser='$(DomainJoinUsername)' `
-                               domainJoinPassword='$(DomainJoinPassword)' `
-                               dscZipUrl="$fullSasUrl"

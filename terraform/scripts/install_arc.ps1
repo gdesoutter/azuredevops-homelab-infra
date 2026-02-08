@@ -3,10 +3,10 @@ param (
     [string]$ResourceGroup, [string]$Location, [string]$ResourceName,
     [string]$SubscriptionId = "c5a7cedd-785a-44ea-a3fb-dfda4063fa77"
 )
-
+# Pour eviter de sortir avant l'initialisation
 $ErrorActionPreference = "Continue"
 
-# 1. Renommage et Installation (On ne change pas ce qui marche)
+# 1. Renommage et Installation
 if ($env:COMPUTERNAME -ne $ResourceName) { Rename-Computer -NewName $ResourceName -Force }
 $agentPath = "$env:ProgramW6432\AzureConnectedMachineAgent\azcmagent.exe"
 $configPath = "C:\ProgramData\AzureConnectedMachineAgent\Config\agentconfig.json"
@@ -16,13 +16,13 @@ if (-not (Test-Path $agentPath)) {
     Start-Process msiexec.exe -ArgumentList '/i C:\Temp\agent.msi /qn' -Wait
 }
 
-# 2. La boucle de patience absolue (On attend le déverrouillage réel)
+# 2. On wait car l'agent est très long à s'initialiser
 Write-Host "Attente du déverrouillage de l'agent (Cible : 10 minutes)..."
 $isInitialized = $false
 $attempts = 0
 while (-not $isInitialized -and $attempts -lt 60) {
     $test = & $agentPath show 2>$null
-    # On vérifie que l'agent ne renvoie PLUS l'erreur d'initialisation du log
+    # Test de l'agent
     if ($test -and $test -notmatch "until agent is initialized") {
         $isInitialized = $true
         Write-Host "L'agent est déverrouillé et prêt pour l'onboarding."
@@ -46,7 +46,7 @@ Write-Host "Lancement de la connexion Azure Arc..."
   --cloud "AzureCloud" `
   --tags 'ArcSQLServerExtensionDeployment=Disabled'
 
-# 4. LA VÉRIFICATION FINALE
+# 4. Check final
 if (Test-Path $configPath) {
     Write-Host "SUCCÈS : Le fichier agentconfig.json est présent. La machine va remonter sur le portail."
     exit 0
