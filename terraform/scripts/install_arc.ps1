@@ -10,65 +10,53 @@ param (
 
 $ErrorActionPreference = "Stop"
 
-# 1. Renommage de l'OS (Déjà validé comme fonctionnel)
+# 1. Renommage de l'OS
 if ($env:COMPUTERNAME -ne $ResourceName) {
     Write-Host "Renaming computer to $ResourceName..."
     Rename-Computer -NewName $ResourceName -Force
 }
 
-# 2. Installation de l'agent (Via l'URL officielle du portail)
+# 2. Installation de l'agent (Via l'URL officielle)
 $agentPath = "$env:ProgramW6432\AzureConnectedMachineAgent\azcmagent.exe"
 if (-not (Test-Path $agentPath)) {
-    Write-Host "Downloading official Azure Arc agent..."
-    $installScriptPath = "C:\Temp\install_windows_azcmagent.ps1"
+    Write-Host "Downloading and Installing Azure Arc agent..."
     if (-not (Test-Path "C:\Temp")) { New-Item -Path "C:\Temp" -ItemType Directory }
-    
+    $installScriptPath = "C:\Temp\install_windows_azcmagent.ps1"
     Invoke-WebRequest -Uri "https://gbl.his.arc.azure.com/azcmagent-windows" -OutFile $installScriptPath
     & $installScriptPath
 }
 
-# 3. BOUCLE DE RETRY - La solution au problème "Agent is initialized"
-# Ton log himds 3.log montre que l'agent bloque la connexion tant qu'il scanne le hardware.
-$maxRetries = 10
-$retryCount = 0
-$connected = $false
-
-while (-not $connected -and $retryCount -lt $maxRetries) {
-    # On vérifie si la machine est déjà connectée (pour éviter de re-faire le travail)
-    $status = & $agentPath show
-    if ($status -match "Connected|Connecté") {
-        Write-Host "Machine is already connected."
-        $connected = $true
-        break
-    }
-
-    Write-Host "Attempting connection ($($retryCount + 1)/$maxRetries)..."
-    
-    # Commande de connexion avec les paramètres officiels
-    & $agentPath connect `
-      --service-principal-id $ClientId `
-      --service-principal-secret $ClientSecret `
-      --tenant-id $TenantId `
-      --subscription-id $SubscriptionId `
-      --resource-group $ResourceGroup `
-      --location $Location `
-      --resource-name $ResourceName `
-      --cloud "AzureCloud" `
-      --tags 'ArcSQLServerExtensionDeployment=Disabled' `
-      --correlation-id "Terraform-$(Get-Random)"
-
-    if ($LASTEXITCODE -eq 0) {
-        $connected = $true
-        Write-Host "Successfully connected to Azure Arc."
+# 3. Attente de l'initialisation (Max 3 minutes)
+# C'est ici qu'on corrige l'erreur "failed to obtain change token" vue dans le log
+Write-Host "Waiting for agent initialization..."
+$isReady = $false
+$attempts = 0
+while (-not $isReady -and $attempts -lt 18) {
+    $test = & $agentPath show
+    # Si le statut apparaît (même Disconnected), le verrou de sécurité est levé
+    if ($test -match "Disconnected|Unconnected|Connected") {
+        $isReady = $true
+        Write-Host "Agent is ready."
     } else {
-        # Si on voit l'erreur d'initialisation dans le log, on attend
-        Write-Host "Agent still initializing or busy. Retrying in 30 seconds..."
-        Start-Sleep -Seconds 30
-        $retryCount++
+        Write-Host "Service busy (initializing)... Attempt $($attempts + 1)/18"
+        Start-Sleep -Seconds 10
+        $attempts++
     }
 }
 
-if (-not $connected) {
-    Write-Error "Failed to connect to Azure Arc after $maxRetries attempts."
-    exit 1
-}
+if (-not $isReady) { throw "Timeout: Agent service never finished initialization." }
+
+# 4. Connexion avec Retry (Max 3 tentatives)
+$connected = $false
+$retryConnect = 0
+while (-not $connected -and $retryConnect -lt 3) {
+    Write-Host "Connecting to Azure Arc (Attempt $($retryConnect + 1)/3)..."
+    & $agentPath connect `
+      --service-principal-id "$ClientId" `
+      --service-principal-secret "$ClientSecret" `
+      --tenant-id "$TenantId" `
+      --subscription-id "$SubscriptionId" `
+      --resource-group "$ResourceGroup" `
+      --location "$Location" `
+      --resource-name "$ResourceName" `
+      --cloud "AzureCloud"
