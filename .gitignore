@@ -1,6 +1,6 @@
+.DS_Store
 .terraform/
 *.tfstate
+*.tfstate.backup
 *.tfvars
-_work/
-bin/
-obj/
+.vscode/
