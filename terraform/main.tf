@@ -22,7 +22,7 @@ resource "null_resource" "os_disk" {
   # CRÉATION : On crée le disque de différenciation
   provisioner "remote-exec" {
     inline = [
-      "New-VHD -Path 'C:\\Hyper-V\\VHDs\\${self.triggers.vm_name}.vhdx' -ParentPath 'C:\\Hyper-V\\Templates\\Server2025_Master.vhdx' -Differencing"
+      "powershell.exe -ExecutionPolicy Bypass -Command \"New-VHD -Path 'C:\\Hyper-V\\VHDs\\${self.triggers.vm_name}.vhdx' -ParentPath 'C:\\Hyper-V\\Templates\\Server2025_Master.vhdx' -Differencing\""
     ]
   }
 
@@ -30,8 +30,7 @@ resource "null_resource" "os_disk" {
   provisioner "remote-exec" {
     when    = destroy
     inline = [
-      "Remove-Item -Path 'C:\\Hyper-V\\VHDs\\${self.triggers.vm_name}.vhdx' -Force -ErrorAction SilentlyContinue"
-    ]
+      "powershell.exe -ExecutionPolicy Bypass -Command \"Remove-Item -Path 'C:\\Hyper-V\\VHDs\\${self.triggers.vm_name}.vhdx' -Force -ErrorAction SilentlyContinue\""    ]
   }
 }
 
