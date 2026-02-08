@@ -43,7 +43,7 @@ Le pipeline (`azure-pipelines.yml`) nécessite un Key Vault nommé `KV-labguilla
 ### 2. Focus sur la Robustesse (Onboarding)
 Le script `install_arc.ps1` inclut une boucle de surveillance spécifique. L'agent Azure Arc nécessite souvent entre **10 et 15 minutes** pour s'initialiser. Le script attend que le verrou disparaisse avant de tenter la connexion finale à Azure.
 
-### 🏗️ Environnement d'Exécution (Runner)
+### 3. Environnement d'Exécution (Runner)
 Le pipeline s'appuie sur un agent **Azure DevOps Self-Hosted** (`HOMELAB-WSTOOLS`). 
 * **Localisation** : Exécuté localement sur mon homelab.
 * **Rôle** : Permet à Azure DevOps de communiquer avec l'hôte Hyper-V (`192.168.1.120`) et d'initier les sessions WinRM.
