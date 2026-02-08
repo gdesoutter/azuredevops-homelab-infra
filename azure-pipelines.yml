@@ -113,21 +113,19 @@ stages:
     jobs:
       - job: ConfigureDSC
         steps:
-          # --- NOUVELLE ÉTAPE : PAUSE DE PROPAGATION ---
           - powershell: |
-              Write-Host "Attente de 120 secondes pour la propagation d'Azure Arc..."
+              Write-Host "Attente de 120 secondes pour la propagation d'Azure Arc de $(vmName)..."
               Start-Sleep -Seconds 120
             displayName: 'Wait for Arc Propagation'
-          # 1. Récupération des secrets DOMAINE
+
           - task: AzureKeyVault@2
             displayName: 'Get Domain Secrets'
             inputs:
               azureSubscription: '$(azureServiceConnection)'
               KeyVaultName: 'KV-labguillaume'
-              SecretsFilter: 'DomainJoinUsername,DomainJoinPassword,StorageAccountKey'
+              SecretsFilter: 'DomainJoinUsername,DomainJoinPassword' 
               RunAsPreJob: true
 
-          # 2. Déploiement Bicep
           - task: AzureCLI@2
             displayName: 'Deploy DSC Extension'
             inputs:
@@ -137,11 +135,10 @@ stages:
               inlineScript: |
                 Write-Host "Application de la configuration sur : $(vmName)"
                 
+                # NETTOYAGE : On ne passe QUE ce que le Bicep attend
                 az deployment group create `
                   --resource-group $(resourceGroupName) `
                   --template-file bicep/main.bicep `
                   --parameters vmName=$(vmName) `
-                               storageAccountName='tfstatelabguillaume' `
-                               storageAccountKey='$(StorageAccountKey)' `
                                domainJoinUser='$(DomainJoinUsername)' `
                                domainJoinPassword='$(DomainJoinPassword)'
