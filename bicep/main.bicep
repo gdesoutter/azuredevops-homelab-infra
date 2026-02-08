@@ -2,10 +2,15 @@
 param location string = resourceGroup().location
 param vmName string
 param domainJoinUser string
+
 @secure()
 param domainJoinPassword string
 
-// 2. Référence à la machine existante
+// Ce paramètre recevra l'URL SAS de ton fichier DomainJoin.zip
+param dscZipUrl string 
+
+// 2. Référence à la machine Arc existante
+// On utilise la version 2022-12-27, plus stable pour les extensions
 resource arcMachine 'Microsoft.HybridCompute/machines@2022-12-27' existing = {
   name: vmName
 }
@@ -23,8 +28,8 @@ resource dscExtension 'Microsoft.HybridCompute/machines/extensions@2022-12-27' =
     settings: {
         wmfVersion: 'latest'
         configuration: {
-            url: 'https://github.com/PowerShell/PSDscResources/archive/refs/heads/master.zip'
-            function: 'ExampleConfig'
+            url: dscZipUrl
+            function: 'DomainJoin' 
         }
     }
     protectedSettings: {
