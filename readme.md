@@ -47,7 +47,7 @@ Le script `install_arc.ps1` inclut une boucle de surveillance spécifique. L'age
 Le pipeline s'appuie sur un agent **Azure DevOps Self-Hosted** (`HOMELAB-WSTOOLS`). 
 * **Localisation** : Exécuté localement sur mon homelab.
 * **Rôle** : Permet à Azure DevOps de communiquer avec l'hôte Hyper-V (`192.168.1.120`) et d'initier les sessions WinRM.
-* 
+  
 ## 🚀 Utilisation
 
 Pour déclencher un déploiement, j'effectue simplement un push sur la branche `main` :
