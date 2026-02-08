@@ -8,38 +8,41 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
-$LogFile = "C:\Temp\arc_connection_result.txt"
 
-# 1. Validation de sécurité : Si Terraform envoie du vide, on arrête tout de suite
-if ([string]::IsNullOrWhiteSpace($ClientSecret) -or [string]::IsNullOrWhiteSpace($ClientId)) {
-    Write-Error "Erreur : ClientId ou ClientSecret est vide. Vérifie ton main.tf."
-    exit 1
-}
-
-# 2. Renommage de l'OS
+# 1. Renommage de l'ordinateur
 if ($env:COMPUTERNAME -ne $ResourceName) {
     Write-Host "Renaming computer to $ResourceName..."
     Rename-Computer -NewName $ResourceName -Force
 }
 
-# 3. Installation de l'agent
+# 2. Installation de l'agent
 $agentPath = "$env:ProgramFiles\AzureConnectedMachineAgent\azcmagent.exe"
 if (-not (Test-Path $agentPath)) {
     Write-Host "Downloading and Installing Azure Arc agent..."
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri "https://aka.ms/AzureConnectedMachineAgent" -OutFile "C:\Temp\AzureConnectedMachineAgent.msi"
-    Start-Process msiexec.exe -ArgumentList '/i C:\Temp\AzureConnectedMachineAgent.msi /qn /l*v "C:\Temp\msi_install.log"' -Wait
+    Start-Process msiexec.exe -ArgumentList '/i C:\Temp\AzureConnectedMachineAgent.msi /qn' -Wait
 }
 
-# 4. Attente active du binaire (indispensable pour l'auto)
-$timeout = Get-Date; $max = 60
-while (-not (Test-Path $agentPath)) {
-    if ((Get-Date) -gt $timeout.AddSeconds($max)) { Write-Error "Timeout installation agent."; exit 1 }
-    Start-Sleep -Seconds 5
+# 3. ATTENTE CRUCIALE DE L'INITIALISATION (Nouveau)
+Write-Host "Waiting for Arc Service to be ready (Initialization phase)..."
+$isReady = $false
+$retryCount = 0
+while (-not $isReady -and $retryCount -lt 20) {
+    # On teste si le service répond sans l'erreur 'until agent is initialized'
+    $testStatus = & $agentPath show
+    if ($testStatus -match "Disconnected|Unconnected|Connected|Connecté") {
+        $isReady = $true
+        Write-Host "Agent service is initialized and ready."
+    } else {
+        Write-Host "Service still initializing... (Attempt $($retryCount + 1)/20)"
+        Start-Sleep -Seconds 10
+        $retryCount++
+    }
 }
 
-# 5. Connexion avec capture de log locale
-Write-Host "Attempting Arc connection for $ResourceName..."
+# 4. Connexion avec gestion des erreurs améliorée
+Write-Host "Connecting to Azure Arc..."
 $azcmParams = @(
     "connect",
     "--service-principal-id", $ClientId,
@@ -50,14 +53,11 @@ $azcmParams = @(
     "--resource-name", $ResourceName
 )
 
-# On redirige tout (standard et erreur) vers le fichier log pour que TU puisses lire la cause si ça échoue
-& $agentPath @azcmParams > $LogFile 2>&1
+& $agentPath @azcmParams
 
-# 6. Vérification finale du statut
-$status = & $agentPath show
-if ($status -match "Connected") {
-    Write-Host "Machine $ResourceName onboarded successfully."
-} else {
-    Write-Error "Connection failed. Content of $LogFile : $(Get-Content $LogFile)"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Onboarding failed with exit code $LASTEXITCODE. Check C:\ProgramData\AzureConnectedMachineAgent\Log\himds.log"
     exit 1
 }
+
+Write-Host "Success: Machine $ResourceName is now connected to Azure Arc."
