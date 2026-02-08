@@ -118,8 +118,6 @@ stages:
               Write-Host "Attente de 120 secondes pour la propagation d'Azure Arc..."
               Start-Sleep -Seconds 120
             displayName: 'Wait for Arc Propagation'
-
-      - job: ConfigureDSC
         steps:
           # 1. Récupération des secrets DOMAINE
           - task: AzureKeyVault@2
