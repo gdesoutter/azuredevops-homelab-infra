@@ -4,12 +4,19 @@ param (
     [string]$ClientSecret,
     [string]$ResourceGroup,
     [string]$Location,
-    [string]$ResourceName
+    [string]$ResourceName = "ARC-SRV-01"
 )
 
 $ErrorActionPreference = "Stop"
 
+# 1. Renommage de l'ordinateur (Hostname OS)
+$CurrentName = $env:COMPUTERNAME
+if ($CurrentName -ne $ResourceName) {
+    Write-Host "Renaming computer from $CurrentName to $ResourceName..."
+    Rename-Computer -NewName $ResourceName -Force
+}
 
+# 2. Installation de l'agent si nécessaire
 if (-not (Test-Path "$env:ProgramFiles\AzureConnectedMachineAgent\azcmagent.exe")) {
     Write-Host "Downloading Azure Arc agent..."
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -19,15 +26,21 @@ if (-not (Test-Path "$env:ProgramFiles\AzureConnectedMachineAgent\azcmagent.exe"
     Start-Process msiexec.exe -ArgumentList '/i AzureConnectedMachineAgent.msi /qn /l*v "install.log"' -Wait
 }
 
+# 3. Connexion à Azure Arc
+Write-Host "Connecting to Azure Arc as $ResourceName in $ResourceGroup ($Location)..."
 
-Write-Host "Connecting to Azure Arc as $ResourceName..."
-& "$env:ProgramFiles\AzureConnectedMachineAgent\azcmagent.exe" connect `
-  --service-principal-id $ClientId `
-  --service-principal-secret $ClientSecret `
-  --tenant-id $TenantId `
-  --resource-group $ResourceGroup `
-  --location $Location `
-  --resource-name $ResourceName `
-  --correlation-id "Terraform-$(Get-Random)"
 
-Write-Host "Machine onboarded successfully."
+$azcmParams = @(
+    "connect",
+    "--service-principal-id", $ClientId,
+    "--service-principal-secret", $ClientSecret,
+    "--tenant-id", $TenantId,
+    "--resource-group", $ResourceGroup,
+    "--location", $Location,
+    "--resource-name", $ResourceName,
+    "--correlation-id", "Terraform-$(Get-Random)"
+)
+
+& "$env:ProgramFiles\AzureConnectedMachineAgent\azcmagent.exe" @azcmParams
+
+Write-Host "Machine $ResourceName onboarded successfully."
