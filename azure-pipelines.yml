@@ -118,7 +118,7 @@ stages:
             displayName: 'Get Domain Secrets'
             inputs:
               azureSubscription: '$(azureServiceConnection)'
-              KeyVaultName: 'KV-LAB-01'
+              KeyVaultName: 'KV-labguillaume'
               SecretsFilter: 'DomainJoinUsername,DomainJoinPassword,StorageAccountKey'
               RunAsPreJob: true
 
