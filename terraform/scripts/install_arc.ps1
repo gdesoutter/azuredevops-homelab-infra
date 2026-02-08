@@ -8,45 +8,38 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
+$LogFile = "C:\Temp\arc_connection_result.txt"
 
-# 1. Renommage de l'OS (Hostname local)
-# On le fait en premier pour que l'agent détecte le nom final souhaité
-$CurrentName = $env:COMPUTERNAME
-if ($CurrentName -ne $ResourceName) {
-    Write-Host "Renaming computer from $CurrentName to $ResourceName..."
-    Rename-Computer -NewName $ResourceName -Force
-}
-
-# 2. Installation de l'agent si nécessaire
-$agentPath = "$env:ProgramFiles\AzureConnectedMachineAgent\azcmagent.exe"
-
-if (-not (Test-Path $agentPath)) {
-    Write-Host "Downloading Azure Arc agent..."
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri "https://aka.ms/AzureConnectedMachineAgent" -OutFile "AzureConnectedMachineAgent.msi"
-    
-    Write-Host "Installing Azure Arc agent (MSI)..."
-    $process = Start-Process msiexec.exe -ArgumentList '/i AzureConnectedMachineAgent.msi /qn /l*v "install.log"' -Wait -PassThru
-    
-    # 3. Boucle de sécurité : On attend que Windows finisse d'écrire le fichier sur le disque
-    $maxAttempts = 12
-    $attempt = 0
-    while (-not (Test-Path $agentPath) -and ($attempt -lt $maxAttempts)) {
-        Write-Host "Waiting for azcmagent.exe to be ready... (Attempt $($attempt + 1)/$maxAttempts)"
-        Start-Sleep -Seconds 5
-        $attempt++
-    }
-}
-
-if (-not (Test-Path $agentPath)) {
-    Write-Error "Critical: Azure Arc Agent binary not found after installation. Check install.log."
+# 1. Validation de sécurité : Si Terraform envoie du vide, on arrête tout de suite
+if ([string]::IsNullOrWhiteSpace($ClientSecret) -or [string]::IsNullOrWhiteSpace($ClientId)) {
+    Write-Error "Erreur : ClientId ou ClientSecret est vide. Vérifie ton main.tf."
     exit 1
 }
 
-# 4. Connexion à Azure Arc
-Write-Host "Connecting to Azure Arc as $ResourceName..."
+# 2. Renommage de l'OS
+if ($env:COMPUTERNAME -ne $ResourceName) {
+    Write-Host "Renaming computer to $ResourceName..."
+    Rename-Computer -NewName $ResourceName -Force
+}
 
-# Utilisation du splatting pour éviter les erreurs de syntaxe des backticks (`)
+# 3. Installation de l'agent
+$agentPath = "$env:ProgramFiles\AzureConnectedMachineAgent\azcmagent.exe"
+if (-not (Test-Path $agentPath)) {
+    Write-Host "Downloading and Installing Azure Arc agent..."
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri "https://aka.ms/AzureConnectedMachineAgent" -OutFile "C:\Temp\AzureConnectedMachineAgent.msi"
+    Start-Process msiexec.exe -ArgumentList '/i C:\Temp\AzureConnectedMachineAgent.msi /qn /l*v "C:\Temp\msi_install.log"' -Wait
+}
+
+# 4. Attente active du binaire (indispensable pour l'auto)
+$timeout = Get-Date; $max = 60
+while (-not (Test-Path $agentPath)) {
+    if ((Get-Date) -gt $timeout.AddSeconds($max)) { Write-Error "Timeout installation agent."; exit 1 }
+    Start-Sleep -Seconds 5
+}
+
+# 5. Connexion avec capture de log locale
+Write-Host "Attempting Arc connection for $ResourceName..."
 $azcmParams = @(
     "connect",
     "--service-principal-id", $ClientId,
@@ -54,10 +47,17 @@ $azcmParams = @(
     "--tenant-id", $TenantId,
     "--resource-group", $ResourceGroup,
     "--location", $Location,
-    "--resource-name", $ResourceName, 
-    "--correlation-id", "Terraform-$(Get-Random)"
+    "--resource-name", $ResourceName
 )
 
-& $agentPath @azcmParams
+# On redirige tout (standard et erreur) vers le fichier log pour que TU puisses lire la cause si ça échoue
+& $agentPath @azcmParams > $LogFile 2>&1
 
-Write-Host "Machine $ResourceName onboarded successfully."
+# 6. Vérification finale du statut
+$status = & $agentPath show
+if ($status -match "Connected") {
+    Write-Host "Machine $ResourceName onboarded successfully."
+} else {
+    Write-Error "Connection failed. Content of $LogFile : $(Get-Content $LogFile)"
+    exit 1
+}
