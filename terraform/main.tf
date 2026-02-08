@@ -56,7 +56,7 @@ resource "hyperv_machine_instance" "vm" {
   # Réseau
   network_adaptors {
     name        = "eth0"
-    switch_name = "Lab-Internal" # <--- Vérifie bien ce nom sur ton Hyper-V !
+    switch_name = "Lab-External" 
   }
 
   vm_firmware {
