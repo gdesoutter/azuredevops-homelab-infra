@@ -78,8 +78,8 @@ resource "null_resource" "onboarding" {
 
   connection {
     type     = "winrm"
-    user     = "Administrator"          # User de ta Golden Image
-    password = var.vm_admin_password    # Password de ta Golden Image
+    user     = "Administrateur"      
+    password = var.vm_admin_password    
     host     = hyperv_machine_instance.vm.network_adaptors[0].ip_addresses[0]
     https    = true
     insecure = true
