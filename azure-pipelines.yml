@@ -78,7 +78,7 @@ stages:
               commandOptions: '-auto-approve'
             env:
               # Mapping Secrets KV -> Variables Terraform
-              TF_VAR_hyperv_host: '192.168.1.20'
+              TF_VAR_hyperv_host: '192.168.1.120'
               TF_VAR_hyperv_user: 'Administrateur'
               TF_VAR_hyperv_password: $(hyperv-password)       
               TF_VAR_vm_admin_password: $(vm-admin-password)
