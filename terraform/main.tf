@@ -25,9 +25,9 @@ resource "null_resource" "os_disk" {
   }
 
   provisioner "remote-exec" {
-    when   = destroy
-    inline = [
-      "powershell.exe -ExecutionPolicy Bypass -Command \"Remove-Item -Path 'C:\\Hyper-V\\VHDs\\${self.triggers.vm_name}.vhdx' -Force -ErrorAction SilentlyContinue\""
+    when    = destroy
+    inline  = [
+      "powershell.exe -ExecutionPolicy Bypass -Command \"try { $p = 'C:\\Hyper-V\\VHDs\\${self.triggers.vm_name}.vhdx'; if (Test-Path $p) { Remove-Item -Path $p -Force -ErrorAction Stop } } catch { }; exit 0\""
     ]
   }
 }
