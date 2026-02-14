@@ -13,7 +13,7 @@ variable "hyperv_password" {
 
 variable "vm_name" {
   type    = string
-  default = "ARC-SRV-01"
+  default = "DC-02"
 }
 variable "vm_admin_password" {
   type      = string

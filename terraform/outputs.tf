@@ -1,5 +1,5 @@
 output "vm_name" {
-  description = "Nom de la machine pour Bicep"
+  description = "Nom de la machine"
   value       = hyperv_machine_instance.vm.name
 }
 
