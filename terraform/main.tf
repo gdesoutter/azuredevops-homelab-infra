@@ -78,6 +78,7 @@ resource "null_resource" "onboarding" {
     type     = "winrm"
     user     = "Administrateur"
     password = var.vm_admin_password
+    # Récupération dynamique de l'IP
     host     = hyperv_machine_instance.vm[each.key].network_adaptors[0].ip_addresses[0]
     https    = true
     insecure = true
@@ -98,7 +99,7 @@ resource "null_resource" "onboarding" {
 
   provisioner "remote-exec" {
     inline = [
-      "powershell.exe -ExecutionPolicy Bypass -File C:/Temp/install_arc.ps1 -TenantId \"${var.tenant_id}\" -ClientId \"${var.client_id}\" -ClientSecret \"${var.client_secret}\" -ResourceGroup \"${var.resource_group}\" -Location \"${var.location}\" -ResourceName \"${each.key}\""
+      "powershell.exe -ExecutionPolicy Bypass -Command \"$s = '${var.client_secret}'; & C:/Temp/install_arc.ps1 -TenantId '${var.tenant_id}' -ClientId '${var.client_id}' -ClientSecret $s -ResourceGroup '${var.resource_group}' -Location '${var.location}' -ResourceName '${each.key}' -SubscriptionId '${var.subscription_id}'\""
     ]
   }
 }
