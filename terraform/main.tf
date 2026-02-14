@@ -59,10 +59,29 @@ resource "hyperv_machine_instance" "vm" {
     enable_secure_boot   = "On"
     secure_boot_template = "MicrosoftWindows"
     boot_order {
-      boot_type           = "HardDiskDrive"
+      boot_type           = "DvdDrive" 
       controller_number   = 0
       controller_location = 0
     }
+  }
+
+  vm_processor {
+    compatibility_for_migration_enabled               = false
+    compatibility_for_older_operating_systems_enabled = false
+    enable_host_resource_protection                   = false
+    expose_virtualization_extensions                  = false
+    hw_thread_count_per_core                          = 0
+    maximum                                           = 100
+    maximum_count_per_numa_node                       = 12
+    maximum_count_per_numa_socket                     = 1
+    relative_weight                                   = 100
+    reserve                                           = 0
+  }
+
+  lifecycle {
+    ignore_changes = [
+      vm_firmware[0].boot_order
+    ]
   }
 }
 
@@ -96,7 +115,7 @@ resource "null_resource" "onboarding" {
     destination = "C:/Temp/install_arc.ps1"
   }
 
-provisioner "remote-exec" {
+  provisioner "remote-exec" {
     inline = [
       "powershell.exe -ExecutionPolicy Bypass -Command \"$s = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64encode(var.client_secret)}')); & C:/Temp/install_arc.ps1 -TenantId '${var.tenant_id}' -ClientId '${var.client_id}' -ClientSecret $s -ResourceGroup '${var.resource_group}' -Location '${var.location}' -ResourceName '${each.key}' -SubscriptionId '${var.subscription_id}'\""
     ]
