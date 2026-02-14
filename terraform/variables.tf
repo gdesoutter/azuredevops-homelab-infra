@@ -48,7 +48,7 @@ variable "vm_catalog" {
       switch_name = "Lab-External"
     }
     "DC-02" = {
-      ram_mb      = 2048
+      ram_mb      = 8192
       vcpu        = 2
       switch_name = "Lab-External"
     }

@@ -7,71 +7,67 @@ param (
 $ErrorActionPreference = "Stop"
 
 try {
-    if ($env:COMPUTERNAME -ne $ResourceName) { 
-        Write-Host "Renommage de la machine..."
-        Rename-Computer -NewName $ResourceName -Force 
-    }
-
     $agentExe = "$env:ProgramW6432\AzureConnectedMachineAgent\azcmagent.exe"
-
     if (-not (Test-Path $agentExe)) {
-        Write-Host "Téléchargement de l'agent (MSI Officiel)..."
+        Write-Host "Installation de l'agent..."
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
-        
         $url = "https://aka.ms/AzureConnectedMachineAgent"
         $msiPath = "C:\Temp\AzureConnectedMachineAgent.msi"
-
         Invoke-WebRequest -Uri $url -OutFile $msiPath -UseBasicParsing
-
-        if ((Get-Item $msiPath).Length -lt 50000000) {
-            throw "ERREUR CRITIQUE: Le fichier téléchargé est trop petit. Ce n'est pas le MSI."
-        }
-
-        Write-Host "Installation MSI..."
-        $proc = Start-Process msiexec.exe -ArgumentList "/i $msiPath /qn /l*v C:\Temp\install.log" -Wait -PassThru
-        
-        if ($proc.ExitCode -ne 0) {
-            throw "Echec installation MSI. Code: $($proc.ExitCode)"
-        }
+        Start-Process msiexec.exe -ArgumentList "/i $msiPath /qn" -Wait
     }
 
-    Write-Host "Attente de l'initialisation du service Agent..."
-    $maxRetries = 30
-    $ready = $false
+    Write-Host "Vérification du service Hybrid Instance Metadata Service (himds)..."
+    $svc = Get-Service himds -ErrorAction SilentlyContinue
+    if ($svc.Status -ne 'Running') {
+        Start-Service himds
+        Start-Sleep -Seconds 5
+    }
 
-    for ($i = 0; $i -lt $maxRetries; $i++) {
-        $status = & $agentExe show --json 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
-        
-        if ($status) {
-            Write-Host "Agent prêt détecté."
-            $ready = $true
+    Write-Host "Attente de la fin du scan matériel (Peut prendre plusieurs minutes sur ton Lab)..."
+    $isReady = $false
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    
+    while ($timer.Elapsed.TotalMinutes -lt 10) {
+        $test = & $agentExe show --json 2>$null
+        if ($LASTEXITCODE -eq 0 -and $test) {
+            Write-Host "L'agent est réveillé et prêt après $($timer.Elapsed.TotalMinutes) minutes."
+            $isReady = $true
             break
         }
-        
-        Write-Host "L'agent s'initialise... (Tentative $($i+1)/$maxRetries)"
-        Start-Sleep -Seconds 10
+        Write-Host "Agent encore occupé... On attend 20 secondes. (Temps écoulé : $([math]::Round($timer.Elapsed.TotalMinutes, 1)) min)"
+        Start-Sleep -Seconds 20
     }
 
-    if (-not $ready) {
-        throw "TIMEOUT: L'agent ne s'est pas initialisé après 5 minutes."
+    if (-not $isReady) { throw "L'agent n'a pas fini son initialisation après 10 minutes. Abandon." }
+
+    Write-Host "Lancement de la connexion Azure Arc..."
+    $connected = $false
+    for ($retry=1; $retry -le 3; $retry++) {
+        & $agentExe connect `
+          --service-principal-id "$ClientId" `
+          --service-principal-secret "$ClientSecret" `
+          --tenant-id "$TenantId" `
+          --subscription-id "$SubscriptionId" `
+          --resource-group "$ResourceGroup" `
+          --location "$Location" `
+          --resource-name "$ResourceName" `
+          --cloud "AzureCloud" `
+          --tags 'ArcSQLServerExtensionDeployment=Disabled'
+
+        if ($LASTEXITCODE -eq 0) {
+            $connected = $true
+            break
+        }
+        Write-Warning "Tentative de connexion $retry échouée. Nouvelle tentative dans 30s..."
+        Start-Sleep -Seconds 30
     }
 
-    # --- 4. CONNEXION ---
-    Write-Host "Connexion à Azure Arc..."
-    & $agentExe connect `
-      --service-principal-id "$ClientId" `
-      --service-principal-secret "$ClientSecret" `
-      --tenant-id "$TenantId" `
-      --subscription-id "$SubscriptionId" `
-      --resource-group "$ResourceGroup" `
-      --location "$Location" `
-      --resource-name "$ResourceName" `
-      --correlation-id "terraform-deploy" --verbose
+    if (-not $connected) { throw "Impossible de connecter la machine à Azure Arc après 3 tentatives." }
 
-    Write-Host "SUCCÈS : Machine connectée."
-
+    Write-Host "SUCCÈS : Machine $ResourceName connectée et provisionnée."
 }
 catch {
-    Write-Error "ÉCHEC CRITIQUE : $_"
+    Write-Error "ÉCHEC : $_"
     exit 1
 }
