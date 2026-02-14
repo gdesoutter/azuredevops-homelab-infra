@@ -89,5 +89,5 @@ stages:
               
               Write-Host "##vso[task.setvariable variable=vmName;isOutput=true]$latestVM"
             workingDirectory: '$(terraformDirectory)'
-            displayName: 'Export VM Name (JSON Fix)'
+            displayName: 'Export VM Name'
             name: 'TFOutput'
