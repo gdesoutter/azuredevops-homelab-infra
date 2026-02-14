@@ -72,8 +72,22 @@ stages:
               TF_VAR_location: $(location)
 
           - powershell: |
-              $vmName = terraform output -raw vm_name
-              Write-Host "##vso[task.setvariable variable=vmName;isOutput=true]$vmName"
+              Write-Host "Récupération des outputs Terraform..."
+              
+              # 1. On récupère la sortie en format JSON (obligatoire pour les listes)
+              $jsonOutput = terraform output -json | ConvertFrom-Json
+              
+              # 2. On extrait la liste 'vm_names' (définie dans ton outputs.tf)
+              $vmList = $jsonOutput.vm_names.value
+              
+              Write-Host ">>> VMs Déployées : $($vmList -join ', ')"
+
+              # 3. Rétro-compatibilité pour le pipeline
+              # Si une étape suivante attend une seule variable 'vmName', on lui donne la dernière de la liste
+              # (Pour 'DC-02' ce sera parfait car c'est la dernière ajoutée)
+              $latestVM = $vmList | Select-Object -Last 1
+              
+              Write-Host "##vso[task.setvariable variable=vmName;isOutput=true]$latestVM"
             workingDirectory: '$(terraformDirectory)'
-            displayName: 'Export VM Name'
+            displayName: 'Export VM Name (JSON Fix)'
             name: 'TFOutput'
