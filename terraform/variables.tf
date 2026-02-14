@@ -42,17 +42,12 @@ variable "vm_catalog" {
   }))
 
   default = {
-    "ARC-SRV-01" = {
-      ram_mb      = 4096
-      vcpu        = 2
-      switch_name = "Lab-External"
-    }
     "DC-02" = {
       ram_mb      = 8192
       vcpu        = 2
       switch_name = "Lab-External"
     }
-    "Test-VM" = {
+    "FILE-01" = {
       ram_mb      = 8192
       vcpu        = 2
       switch_name = "Lab-External"
