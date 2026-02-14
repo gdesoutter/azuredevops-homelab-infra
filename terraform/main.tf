@@ -96,7 +96,7 @@ resource "null_resource" "onboarding" {
     destination = "C:/Temp/install_arc.ps1"
   }
 
-  provisioner "remote-exec" {
+provisioner "remote-exec" {
     inline = [
       "powershell.exe -ExecutionPolicy Bypass -Command \"$s = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64encode(var.client_secret)}')); & C:/Temp/install_arc.ps1 -TenantId '${var.tenant_id}' -ClientId '${var.client_id}' -ClientSecret $s -ResourceGroup '${var.resource_group}' -Location '${var.location}' -ResourceName '${each.key}' -SubscriptionId '${var.subscription_id}'\""
     ]

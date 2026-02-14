@@ -53,8 +53,7 @@ try {
       --resource-group "$ResourceGroup" `
       --location "$Location" `
       --resource-name "$ResourceName" `
-      --cloud "AzureCloud" `
-      --tags 'Source=Terraform_Lab' `
+      --cloud "AzureCloud" 2>&1 | Out-File -FilePath $logFile -Append
 
     Log-Message "Vérification finale..."
     $check = & $agentExe show --json | ConvertFrom-Json
