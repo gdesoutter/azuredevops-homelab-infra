@@ -25,7 +25,7 @@ try {
     }
 
     Log-Message "Nettoyage des tentatives précédentes..."
-    & $agentExe disconnect --force --confirm 2>$null
+    & $agentExe disconnect --force-local-only --confirm 2>$null
 
     Log-Message "Attente que le service HIMDS soit prêt (Lock-Check)..."
     $ready = $false
@@ -55,7 +55,6 @@ try {
       --resource-name "$ResourceName" `
       --cloud "AzureCloud" `
       --tags 'Source=Terraform_Lab' `
-      --force
 
     Log-Message "Vérification finale..."
     $check = & $agentExe show --json | ConvertFrom-Json
